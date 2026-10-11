@@ -20,6 +20,10 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '573181006792'; // wa.me li
 const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://g-venlipanelsms.onrender.com';
 const ONAYLI_SMS_API_KEY = process.env.ONAYLI_SMS_API_KEY || 'osms_7f193a3fe65448a9380061c1b56e9fdc29f49c67e89eb3dd';
 const ONAYLI_SMS_URL = 'https://onaylasms.com.tr/stubs/handler_api.php';
+// Instagram takipçi/beğeni vb. için SMM panel sağlayıcısı (standart "add/status/services/balance" API formatı).
+// API anahtarını Render > Environment'tan SMM_API_KEY olarak gir - buraya yazmıyoruz, boşsa bu bölüm devre dışı kalır.
+const SMM_API_URL = process.env.SMM_API_URL || 'https://peakerr.com/api/v2';
+const SMM_API_KEY = process.env.SMM_API_KEY || '';
 // Sağlayıcı bakiyesi bu değerin altına düşünce Telegram'dan otomatik uyarı gelir
 const LOW_BALANCE_THRESHOLD = parseFloat(process.env.LOW_BALANCE_THRESHOLD || '50');
 
@@ -48,6 +52,18 @@ function providerGet(params, timeout) {
     return run;
 }
 
+// ====== SMM (Instagram takipçi/beğeni vb.) sağlayıcısına istek ======
+// Çoğu SMM panel sağlayıcısı (Peakerr dahil) aynı standart API'yi kullanır: POST, form-urlencoded,
+// key + action (+ servise göre service/link/quantity veya order parametreleri).
+function smmPost(params, timeout) {
+    if (!SMM_API_KEY) return Promise.reject(new Error('SMM_API_KEY ayarlanmamış'));
+    const body = new URLSearchParams(Object.assign({ key: SMM_API_KEY }, params));
+    return axios.post(SMM_API_URL, body.toString(), {
+        timeout: timeout || 20000,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+}
+
 const DEFAULT_DB = {
     users: {
         [ADMIN_USERNAME]: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD, balance: 5000, role: "admin", banned: false }
@@ -57,7 +73,9 @@ const DEFAULT_DB = {
     logins: [],
     orders: {},
     support: {}, // username -> [{from:'user'|'admin', text, time, ts}]
-    adminSessions: {} // token -> {username, ts} - DİSKE YAZILIR, sunucu yeniden başlasa da (Render uykudan uyanma/redeploy) admin oturumu "Yetkisiz!" vermesin diye
+    adminSessions: {}, // token -> {username, ts} - DİSKE YAZILIR, sunucu yeniden başlasa da (Render uykudan uyanma/redeploy) admin oturumu "Yetkisiz!" vermesin diye
+    smmConfig: {}, // itemId -> {serviceId, pricePerThousand, min, max} - admin panelden ayarlanır
+    smmOrders: {} // id -> {username, itemId, link, quantity, price, providerOrderId, status, time, ts}
 };
 
 // ====== KALICI KAYIT (dosyaya yazma) ======
@@ -1556,4 +1574,4 @@ app.listen(PORT, async () => {
         const webhookUrl = `${RENDER_EXTERNAL_URL}${webhookPath}`;
         await axios.get(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=${webhookUrl}`);
     } catch (err) {}
-});vvv
+});
